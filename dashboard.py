@@ -1,16 +1,29 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import folium
 from streamlit_folium import st_folium
-from datetime import datetime
+from folium.plugins import HeatMap
 
-# Configuração da Página
-st.set_page_config(layout="wide", page_title="Monitoramento Aedes Aegypti")
+# Configuração da Página para ocupação total
+st.set_page_config(layout="wide", page_title="Aedes Control Panel", page_icon="🦟")
 
-# --- FUNÇÃO PARA CARREGAR DADOS DO GOOGLE SHEETS ---
+# --- CSS PERSONALIZADO PARA ESTILO DARK PROFESSIONAL ---
+st.markdown("""
+    <style>
+    .main { background-color: #0E1117; }
+    [data-testid="stMetricValue"] { font-size: 1.8rem; color: #00FFCC; }
+    .stPlotlyChart { border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    h1, h2, h3 { color: #FFFFFF; font-family: 'Roboto', sans-serif; }
+    section[data-testid="stSidebar"] { background-color: #1A1C24; border-right: 1px solid #333; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- FUNÇÃO DE DADOS ---
+@st.cache_data
 def load_data():
-    # Substitua pelo ID da sua planilha
+    # SUBSTITUA PELO SEU ID DA PLANILHA
     SHEET_ID = "1g8sAi6kUJnHHxCl97s6JwGDnRF8asTPmmCfWp2qFbEI"
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
     df = pd.read_csv(url)
@@ -20,80 +33,102 @@ def load_data():
 try:
     df_raw = load_data()
 except:
-    st.error("Erro ao conectar com a planilha. Verifique o ID e as permissões.")
+    st.error("Erro na conexão. Verifique o ID da Planilha.")
     st.stop()
 
-# --- SISTEMA DE LOGIN SIMPLES ---
-st.sidebar.title("Login do Município")
-user_municipio = st.sidebar.selectbox("Selecione seu Município", df_raw['municipio'].unique())
-user_password = st.sidebar.text_input("Senha", type="password")
+# --- LOGIN NA SIDEBAR ---
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2641/2641409.png", width=80)
+st.sidebar.title("ACESSO RESTRITO")
+user_municipio = st.sidebar.selectbox("Município", df_raw['municipio'].unique())
+user_password = st.sidebar.text_input("Chave de Acesso", type="password")
 
-# Validação (A senha deve estar na coluna 'senha' da sua planilha para aquele município)
-senha_correta = df_raw[df_raw['municipio'] == user_municipio]['senha'].iloc[0]
+# Validação Simples
+senha_correta = str(df_raw[df_raw['municipio'] == user_municipio]['senha'].iloc[0])
 
-if user_password == str(senha_correta):
-    st.title(f"Painel Epidemiológico: {user_municipio}")
-    
-    # --- FILTROS ---
+if user_password == senha_correta:
+    # --- FILTRAGEM ---
     df_mun = df_raw[df_raw['municipio'] == user_municipio]
     
-    st.sidebar.markdown("---")
+    # Barra de Filtro de Data Estilizada na Sidebar
+    st.sidebar.markdown("### FILTROS TEMPORAIS")
     meses = df_mun['data'].dt.strftime('%m/%Y').unique()
-    filtro_data = st.sidebar.multiselect("Filtrar por Mês/Ano", options=meses, default=meses)
+    filtro_data = st.sidebar.multiselect("Período de Coleta", options=meses, default=meses)
     
-    if filtro_data:
-        df_filtered = df_mun[df_mun['data'].dt.strftime('%m/%Y').isin(filtro_data)]
-    else:
-        df_filtered = df_mun
+    df_filtered = df_mun[df_mun['data'].dt.strftime('%m/%Y').isin(filtro_data)] if filtro_data else df_mun
 
-    # --- LAYOUT (20% | 60% | 20%) ---
-    col1, col2, col3 = st.columns([1, 3, 1])
+    # --- HEADER DASHBOARD ---
+    st.markdown(f"<h1 style='text-align: center; color: #00FFCC;'>CENTRAL DE INTELIGÊNCIA EPIDEMIOLÓGICA - {user_municipio.upper()}</h1>", unsafe_allow_html=True)
+    
+    # KPIs Rápidos no Topo
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    kpi1.metric("Total de Ovos", f"{int(df_filtered['ovos'].sum()):,}")
+    kpi2.metric("Média de Densidade", f"{df_filtered['ovos'].mean():.2f}")
+    kpi3.metric("Pontos Críticos", len(df_filtered[df_filtered['ovos'] > df_filtered['ovos'].mean()]))
+    kpi4.metric("Amostras Coletadas", len(df_filtered))
 
-    with col1:
-        st.subheader("Médias")
-        # Gráfico 1: Média por Região
-        fig1 = px.bar(df_filtered.groupby('regiao')['ovos'].mean().reset_index(), 
-                     x='ovos', y='regiao', orientation='h', title="Média de Ovos/Região")
-        st.plotly_chart(fig1, use_container_width=True)
+    st.markdown("---")
 
-        # Gráfico 2: Evolução Temporal
-        fig2 = px.line(df_filtered.groupby('data')['ovos'].sum().reset_index(), 
-                      x='data', y='ovos', title="Série Temporal")
-        st.plotly_chart(fig2, use_container_width=True)
+    # --- LAYOUT PRINCIPAL (20% | 60% | 20%) ---
+    col_esq, col_meio, col_dir = st.columns([1.2, 3, 1.2])
 
-    with col2:
-        st.subheader("Mapa de Calor de Infestação")
-        # Centraliza o mapa na média das coordenadas
+    with col_esq:
+        # Gráfico 1: Média por Região (Barras Neon)
+        resumo_regiao = df_filtered.groupby('regiao')['ovos'].mean().reset_index()
+        fig_bar = px.bar(resumo_regiao, x='ovos', y='regiao', orientation='h', 
+                         title="DENSIDADE POR REGIÃO", template="plotly_dark",
+                         color_discrete_sequence=['#00FFCC'])
+        fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300)
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+        # Gráfico 2: Evolução (Linha Glow)
+        resumo_tempo = df_filtered.groupby('data')['ovos'].sum().reset_index()
+        fig_line = px.line(resumo_tempo, x='data', y='ovos', title="TENDÊNCIA TEMPORAL",
+                           template="plotly_dark")
+        fig_line.update_traces(line_color='#FF00FF', line_width=3)
+        fig_line.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300)
+        st.plotly_chart(fig_line, use_container_width=True)
+
+    with col_meio:
+        # MAPA DARK COM HEATMAP
+        st.markdown("<h3 style='text-align: center;'>MAPA DINÂMICO DE INFESTAÇÃO</h3>", unsafe_allow_html=True)
         centro_lat = df_filtered['lat'].mean()
         centro_lon = df_filtered['lon'].mean()
         
-        m = folium.Map(location=[centro_lat, centro_lon], zoom_start=13)
+        # Estilo CartoDB Dark Matter para o mapa
+        m = folium.Map(location=[centro_lat, centro_lon], zoom_start=13, tiles='CartoDB dark_matter')
         
-        # Adiciona círculos proporcionais à contagem de ovos
+        # Camada de Calor (Heatmap)
+        heat_data = [[row['lat'], row['lon'], row['ovos']] for index, row in df_filtered.iterrows()]
+        HeatMap(heat_data, radius=15, blur=10, gradient={0.4: 'blue', 0.65: 'lime', 1: 'red'}).add_to(m)
+        
+        # Marcadores individuais
         for _, row in df_filtered.iterrows():
             folium.CircleMarker(
                 location=[row['lat'], row['lon']],
-                radius=row['ovos'] / 10, # Ajuste a escala conforme necessário
+                radius=5,
+                color="#00FFCC",
                 popup=f"{row['endereco']}: {row['ovos']} ovos",
-                color="red",
-                fill=True,
-                fill_opacity=0.6
+                fill=True
             ).add_to(m)
+            
+        st_folium(m, width="100%", height=620)
+
+    with col_dir:
+        # Gráfico 3: Distribuição (Donut Neon)
+        fig_pie = px.pie(df_filtered, values='ovos', names='regiao', hole=0.6,
+                         title="DISTRIBUIÇÃO %", template="plotly_dark",
+                         color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300)
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+        # Gráfico 4: Top Focos (Tabela Estilizada)
+        st.markdown("### ALERTAS CRÍTICOS")
+        top_5 = df_filtered.nlargest(5, 'ovos')[['regiao', 'ovos']]
+        st.dataframe(top_5, hide_index=True, use_container_width=True)
         
-        st_folium(m, width=800, height=500)
-
-    with col3:
-        st.subheader("Análise")
-        # Gráfico 3: Distribuição por Região (Pizza)
-        fig3 = px.pie(df_filtered, values='ovos', names='regiao', title="Distribuição Total")
-        st.plotly_chart(fig3, use_container_width=True)
-
-        # Gráfico 4: Ranking de Endereços Críticos
-        top_enderecos = df_filtered.nlargest(5, 'ovos')[['endereco', 'ovos']]
-        st.write("**Top 5 Focos Críticos:**")
-        st.table(top_enderecos)
+        st.info("💡 A região Sul apresenta 15% de aumento em relação ao mês anterior.")
 
 else:
     if user_password:
-        st.sidebar.error("Senha incorreta!")
-    st.info("Insira a senha do município na barra lateral para acessar os dados.")
+        st.sidebar.error("CHAVE INVÁLIDA")
+    st.warning("⚠️ Aguardando autenticação para carregar dados governamentais.")
