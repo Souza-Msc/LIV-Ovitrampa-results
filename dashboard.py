@@ -117,7 +117,7 @@ if user_password == senha_correta:
         fig_bar = px.bar(resumo_reg, x='ovos', y='regiao', orientation='h', 
                          title="MÉDIA POR REGIÃO", template="plotly_white",
                          color_discrete_sequence=['#3B82F6'])
-        fig_bar.update_layout(height=280, margin=dict(l=200, r=10, t=40, b=30), paper_bgcolor='rgba(0,0,0,0)')
+        fig_bar.update_layout(height=280, margin=dict(l=10, r=10, t=40, b=90), paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_bar, use_container_width=True)
 
         # Gráfico 2: Tendência Temporal
