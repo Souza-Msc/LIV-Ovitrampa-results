@@ -128,7 +128,7 @@ if user_password == senha_correta:
         st.plotly_chart(fig_line, use_container_width=True)
 
     with col_meio:
-        st.markdown("<h3 style='text-align: center;'>MAPA DE INFESTAÇÃO</h3>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center;'>MAPA DE INFESTAÇÃO</h2>", unsafe_allow_html=True)
         
         # O Mapa agora reside dentro de um container que herdará o estilo de borda
         centro_mapa = [df_mapa['lat'].mean(), df_mapa['lon'].mean()]
@@ -155,14 +155,14 @@ if user_password == senha_correta:
         m.add_child(colormap)
         
         # Renderização
-        st_folium(m, width="100%", height=750, returned_objects=[])
+        st_folium(m, width="100%", height=650, returned_objects=[])
         
     with col_dir:
         # Gráfico 3: Distribuição de Intensidade
         resumo_pie = df_mapa.groupby('regiao')['ovos'].mean().reset_index()
         fig_pie = px.pie(resumo_pie, values='ovos', names='regiao', hole=0.5, 
                          title="DISTRIBUIÇÃO %", template="plotly_white")
-        fig_pie.update_layout(height=350, showlegend=False, margin=dict(l=10, r=10, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)')
+        fig_pie.update_layout(height=350, showlegend=False, margin=dict(l=10, r=10, t=30, b=20), paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_pie, use_container_width=True)
 
         # Gráfico 4: Tabela de Alertas
