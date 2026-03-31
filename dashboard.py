@@ -11,47 +11,29 @@ import numpy as np
 st.set_page_config(layout="wide", page_title="Aedes Control Panel", page_icon="🦟")
 
 # 2. CSS PERSONALIZADO (TEMA CLARO COM SESSÕES MARCADAS)
+# --- CSS ATUALIZADO PARA FORÇAR MOLDURA NO MAPA ---
 st.markdown("""
     <style>
-    /* Fundo da página em cinza claro para destacar os cards brancos */
     .main { background-color: #F0F2F5; }
     
-    /* ESTILO DE CAIXA (CARD): Aplicado a Gráficos, Mapas e Tabelas */
-    .stPlotlyChart, .stDataFrame, .stFoliumContainer {
+    /* Força a moldura em Gráficos, Tabelas e no Container do Mapa */
+    .stPlotlyChart, .stDataFrame, .stFoliumContainer, [data-testid="stVerticalBlock"] > .element-container:has(.stFoliumContainer) {
         background-color: #FFFFFF !important;
-        border: 1px solid #D1D5DB !important; /* Borda cinza clara definida */
+        border: 1px solid #D1D5DB !important;
         border-radius: 12px !important;
-        padding: 15px !important; /* Espaçamento interno para respiro */
+        padding: 10px !important;
         box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
-        margin-bottom: 20px;
+        margin-bottom: 20px !important;
     }
 
-    /* Ajuste para o mapa interno acompanhar o arredondamento da caixa */
+    /* Ajuste para o mapa não "vazar" para fora da borda arredondada */
     .stFoliumContainer iframe {
-        border-radius: 20px !important;
+        border-radius: 8px !important;
     }
 
-    /* Estilização dos KPIs (Métricas) */
-    [data-testid="stMetricValue"] { 
-        color: #1E40AF; 
-        font-weight: 800; 
-        font-size: 1.8rem; 
-    }
+    [data-testid="stMetricValue"] { color: #1E40AF; font-weight: 800; }
+    h1, h2, h3 { color: #111827; font-family: 'Inter', sans-serif; }
     
-    /* Títulos e Tipografia */
-    h1, h2, h3 { 
-        color: #111827; 
-        font-family: 'Inter', sans-serif; 
-        font-weight: 700;
-    }
-
-    /* Sidebar Estilizada */
-    section[data-testid="stSidebar"] { 
-        background-color: #FFFFFF; 
-        border-right: 1px solid #D1D5DB; 
-    }
-
-    /* Dica Compacta (Ocupa pouco espaço) */
     .small-info {
         font-size: 0.8rem;
         padding: 8px;
@@ -59,11 +41,7 @@ st.markdown("""
         border-left: 4px solid #3B82F6;
         border-radius: 4px;
         color: #1E40AF;
-        margin-top: 5px;
     }
-
-    /* Esconder barra de ferramentas do Streamlit */
-    div[data-testid="stToolbar"] {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
@@ -150,17 +128,15 @@ if user_password == senha_correta:
     with col_meio:
         st.markdown("<h3 style='text-align: center;'>MAPA DE INFESTAÇÃO</h3>", unsafe_allow_html=True)
         
-        # Configuração do Mapa
+        # O Mapa agora reside dentro de um container que herdará o estilo de borda
         centro_mapa = [df_mapa['lat'].mean(), df_mapa['lon'].mean()]
         m = folium.Map(location=centro_mapa, zoom_start=14, tiles="CartoDB positron")
         
-        # Escala de cores Linear (Azul -> Vermelho)
+        # Escala de cores (Azul -> Vermelho)
         v_min, v_max = df_mapa['ovos'].min(), df_mapa['ovos'].max()
-        if v_min == v_max: v_max += 1 # Evita erro se todos os valores forem iguais
+        if v_min == v_max: v_max += 1
         colormap = cm.LinearColormap(colors=['blue', 'lime', 'yellow', 'red'], vmin=v_min, vmax=v_max)
-        colormap.caption = 'Densidade Média de Ovos'
         
-        # Adição dos Pontos Individuais com TRANSPARÊNCIA
         for _, row in df_mapa.iterrows():
             folium.CircleMarker(
                 location=[row['lat'], row['lon']],
@@ -168,17 +144,16 @@ if user_password == senha_correta:
                 color=colormap(row['ovos']),
                 fill=True,
                 fill_color=colormap(row['ovos']),
-                fill_opacity=0.4, # Transparência solicitada para ver as ruas
+                fill_opacity=0.4,
                 weight=1.5,
-                popup=f"<b>Endereço:</b> {row['endereco']}<br><b>Média:</b> {row['ovos']:.1f} ovos",
+                popup=f"<b>Endereço:</b> {row['endereco']}<br><b>Média:</b> {row['ovos']:.1f}",
                 tooltip=f"{row['ovos']:.1f} ovos"
             ).add_to(m)
             
         m.add_child(colormap)
         
-        # Renderização do Mapa dentro da Caixa Branca
-        st_folium(m, width="100%", height=560, returned_objects=[])
-
+        # Renderização
+        st_folium(m, width="100%", height=550, returned_objects=[])
     with col_dir:
         # Gráfico 3: Distribuição de Intensidade
         resumo_pie = df_mapa.groupby('regiao')['ovos'].mean().reset_index()
