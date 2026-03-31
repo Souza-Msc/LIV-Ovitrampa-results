@@ -161,7 +161,7 @@ if user_password == senha_correta:
         resumo_pie = df_mapa.groupby('regiao')['ovos'].mean().reset_index()
         fig_pie = px.pie(resumo_pie, values='ovos', names='regiao', hole=0.5, 
                          title="DISTRIBUIÇÃO %", template="plotly_white")
-        fig_pie.update_layout(height=280, showlegend=False, margin=dict(l=10, r=10, t=40, b=10), paper_bgcolor='rgba(0,0,0,0)')
+        fig_pie.update_layout(height=230, showlegend=False, margin=dict(l=10, r=10, t=40, b=10), paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_pie, use_container_width=True)
 
         # Gráfico 4: Tabela de Alertas
