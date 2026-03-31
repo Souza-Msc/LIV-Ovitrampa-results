@@ -170,60 +170,101 @@ if user_password and user_password.strip() == senha_correta:
         fig_line.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300, margin=dict(l=20, r=20, t=50, b=20))
         st.plotly_chart(fig_line, use_container_width=True)
 
-    # --- COLUNA MEIO (Mapa Corrigido) ---
+# --- COLUNA MEIO (Mapa Claro com Cores Proporcionais) ---
     with col_meio:
-        st.markdown("<h3 style='text-align: center;'>MAPA DINÂMICO DE INFESTAÇÃO</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; color: #333;'>MAPA DINÂMICO DE INFESTAÇÃO (Escala de Intensidade)</h3>", unsafe_allow_html=True)
         
-        # 1. Agrupar os dados por Coordenadas e Endereço para tirar a MÉDIA
-        # Isso resolve o problema de ter múltiplas amostras no mesmo local em datas diferentes.
+        # 1. Agrupamento para tirar a média por ponto único
         df_mapa = df_filtered.groupby(['lat', 'lon', 'endereco']).agg({
-            'ovos': 'mean' # Tira a média de ovos para aquele ponto
+            'ovos': 'mean' # Tira a média de ovos para aquele endereço/coordenada
         }).reset_index()
 
-        # Define o centro do mapa com base na média das coordenadas filtradas
+        # Define o centro do mapa
         centro_lat = df_mapa['lat'].mean()
         centro_lon = df_mapa['lon'].mean()
         
-        # Cria o mapa com estilo Dark
-        m = folium.Map(location=[centro_lat, centro_lon], zoom_start=14, tiles="OpenStreetMap")
+        # Cria o mapa no MODO CLARO
+        m = folium.Map(
+            location=[centro_lat, centro_lon], 
+            zoom_start=14, 
+            tiles="CartoDB positron" # Um claro elegante e minimalista
+        )
         
-        # 2. Camada de Calor (HeatMap) - Opcional, mas mantida
+        # 2. Camada de Calor (HeatMap) - Mantida para dar profundidade
         heat_data = [[row['lat'], row['lon'], row['ovos']] for index, row in df_mapa.iterrows()]
-        HeatMap(heat_data, radius=15, blur=12, name="Mapa de Calor").add_to(m)
+        HeatMap(heat_data, radius=18, blur=15, name="Mapa de Calor", show=False).add_to(m) # show=False começa desligado
         
-        # 3. Pontos Individuais com Tamanho Variável (SEU PEDIDO)
-        for _, row in df_mapa.iterrows():
-            # Define o tamanho do raio do ponto em pixels.
-            # Usamos raiz quadrada da média para escalonar melhor, multiplicado por um fator.
-            # O max(..., 4) garante que o ponto tenha pelo menos 4 pixels para ser visível.
-            radius_size = max(np.sqrt(row['ovos']) * 1.5, 4)
+        # 3. Lógica de Cores Proporcionais (SEU PEDIDO)
+        # Primeiro, pegamos o valor mínimo e máximo de ovos no conjunto de dados filtrado
+        max_ovos_mapa = df_mapa['ovos'].max()
+        min_ovos_mapa = df_mapa['ovos'].min()
+        
+        # Se houver apenas um ponto ou todos os valores forem iguais, evitamos erro de divisão por zero
+        if max_ovos_mapa == min_ovos_mapa:
+            max_ovos_mapa = max_ovos_mapa + 1
             
-            # Popup com informações detalhadas
+        import branca.colormap as cm
+        
+        # Cria a escala de cor linear: Azul (frio/baixo) -> Amarelo (médio) -> Vermelho (quente/alto)
+        colormap = cm.LinearColormap(
+            colors=['blue', 'lime', 'yellow', 'red'], # Definimos os passos de cor
+            vmin=min_ovos_mapa, 
+            vmax=max_ovos_mapa
+        )
+        colormap.caption = 'Média de Ovos Coletados' # Legenda da escala
+        
+        # Marcadores Individuais com COR VARIÁVEL
+        for _, row in df_mapa.iterrows():
+            
+            # Obtém a cor correspondente ao valor de ovos usando a colormap
+            cor_ponto = colormap(row['ovos'])
+            
+            # Popup formatado
             popup_text = f"""
-                <div style='font-family: sans-serif; font-size: 12px; color: #333;'>
+                <div style='font-family: sans-serif; font-size: 13px; color: #333;'>
                     <b>Endereço:</b> {row['endereco']}<br>
-                    <b>Coordenadas:</b> {row['lat']:.5f}, {row['lon']:.5f}<br>
-                    <b style='color: red; font-size: 14px;'>Média de Ovos: {row['ovos']:.1f}</b>
+                    <b style='color: {cor_ponto}; font-size: 15px;'>Média: {row['ovos']:.1f} ovos</b>
                 </div>
             """
             
             folium.CircleMarker(
                 location=[row['lat'], row['lon']],
-                radius=radius_size,
-                color="#00FFCC", # Cor da borda (Cyan)
+                radius=9, # TAMANHO FIXO E NÍTIDO
+                color="#333", # Cor da borda (preto suave para contraste)
+                weight=1, # Espessura da borda
                 fill=True,
-                fill_color="#00FFCC",
-                fill_opacity=0.6,
+                fill_color=cor_ponto, # COR PROPORCIONAL AO VALOR
+                fill_opacity=0.9, # Quase opaco para ficar bem visível no fundo claro
                 popup=folium.Popup(popup_text, max_width=250),
-                tooltip=f"{row['ovos']:.1f} ovos (média)" # Dica rápida ao passar o mouse
+                tooltip=f"{row['ovos']:.1f} ovos (média)"
             ).add_to(m)
             
-        # Adiciona controle de camadas (para ligar/desligar o heatmap se quiser)
+        # Adiciona o controle de camadas e a legenda da escala de cor
         folium.LayerControl().add_to(m)
+        m.add_child(colormap) # Adiciona a legenda de cor no canto superior direito
 
-        # Renderiza o mapa no Streamlit
         st_folium(m, width="100%", height=620, returned_objects=[])
 
+    # --- COLUNA DIREITA (Ajuste para Top Focos usar MÉDIA) ---
+    with col_dir:
+        # Gráfico 3: Distribuição % por Região (usando a média das médias para representar intensidade)
+        resumo_pie = df_mapa.groupby('regiao')['ovos'].mean().reset_index()
+        fig_pie = px.pie(resumo_pie, values='ovos', names='regiao', hole=0.6,
+                         title="DISTRIBUIÇÃO DA INTENSIDADE % (Médias)", template="plotly_dark",
+                         color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+        # Gráfico 4: Top Focos (Maiores Médias por Ponto)
+        st.markdown("### TOP 5 FOCOS (Intensidade)")
+        # Agora usamos o df_mapa, que já tem as médias por endereço
+        top_5 = df_mapa.nlargest(5, 'ovos').reset_index(drop=True)
+        top_5['ovos'] = top_5['ovos'].round(1) # Arredonda para 1 casa
+        
+        # Exibe o DataFrame limpo
+        st.dataframe(top_5[['endereco', 'ovos']], hide_index=True, use_container_width=True)
+        
+        st.info(f"💡 Dica: No mapa, a cor representa a intensidade: Azul é baixo, Vermelho é alto.")
     # --- COLUNA DIREITA (Outras Análises) ---
     with col_dir:
         # Gráfico 3: Distribuição % por Região
