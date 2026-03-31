@@ -247,6 +247,7 @@ if user_password and user_password.strip() == senha_correta:
 
     # --- COLUNA DIREITA (Ajuste para Top Focos usar MÉDIA) ---
     with col_dir:
+        
         # Gráfico 3: Distribuição % por Região (usando a média das médias para representar intensidade)
         resumo_pie = df_mapa.groupby('regiao')['ovos'].mean().reset_index()
         fig_pie = px.pie(resumo_pie, values='ovos', names='regiao', hole=0.6,
@@ -265,6 +266,7 @@ if user_password and user_password.strip() == senha_correta:
         st.dataframe(top_5[['endereco', 'ovos']], hide_index=True, use_container_width=True)
         
         st.info(f"💡 Dica: No mapa, a cor representa a intensidade: Azul é baixo, Vermelho é alto.")
+   
     # --- COLUNA DIREITA (Outras Análises) ---
     with col_dir:
         # Gráfico 3: Distribuição % por Região
