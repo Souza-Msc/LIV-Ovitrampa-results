@@ -122,7 +122,14 @@ if user_password == senha_correta:
         st.plotly_chart(fig_line, use_container_width=True)
 
     with col_meio:
-        st.markdown("<h3 style='text-align: center;'>MAPA DE CALOR E PONTOS</h3>", unsafe_allow_html=True)
+       with col_meio:
+        st.markdown("<h3 style='text-align: center;'>MAPA DE INFESTAÇÃO</h3>", unsafe_allow_html=True)
+        st_folium(
+        m, 
+        width="100%", 
+        height=580, # Diminuí levemente para caber melhor na tela com o padding da caixa
+        returned_objects=[]
+    )
         centro = [df_mapa['lat'].mean(), df_mapa['lon'].mean()]
         m = folium.Map(location=centro, zoom_start=14, tiles="CartoDB positron")
         
