@@ -155,7 +155,8 @@ if user_password == senha_correta:
         m.add_child(colormap)
         
         # Renderização
-        st_folium(m, width="100%", height=550, returned_objects=[])
+        st_folium(m, width="100%", height=750, returned_objects=[])
+        
     with col_dir:
         # Gráfico 3: Distribuição de Intensidade
         resumo_pie = df_mapa.groupby('regiao')['ovos'].mean().reset_index()
