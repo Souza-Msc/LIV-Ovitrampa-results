@@ -8,17 +8,53 @@ from folium.plugins import HeatMap
 import numpy as np
 
 # Configuração da Página para ocupação total
-st.set_page_config(layout="wide", page_title="Aedes Control Panel", page_icon="🦟")
+st.set_page_config(layout="wide", page_title="Relatório dos Resultados controle Aedes - LIV", page_icon="🦟")
 
-# --- CSS PERSONALIZADO PARA ESTILO DARK PROFESSIONAL ---
+# --- CSS PERSONALIZADO PARA ESTILO LIGHT PROFESSIONAL (TEMA CLARO) ---
 st.markdown("""
     <style>
-    .main { background-color: #0E1117; }
-    [data-testid="stMetricValue"] { font-size: 1.8rem; color: #00FFCC; }
-    .stPlotlyChart { border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-    h1, h2, h3 { color: #FFFFFF; font-family: 'Roboto', sans-serif; }
-    section[data-testid="stSidebar"] { background-color: #1A1C24; border-right: 1px solid #333; }
-    div[data-testid="stToolbar"] {visibility: hidden;} /* Esconde a barra do Streamlit */
+    /* Fundo principal da página (Cinza muito claro) */
+    .main { 
+        background-color: #F8F9FA; 
+    }
+    
+    /* Estilização dos KPIs (Métricas) */
+    [data-testid="stMetricValue"] { 
+        font-size: 2rem; 
+        color: #1A73E8; /* Azul Google para destaque */
+        font-weight: bold;
+    }
+    
+    /* Estilização das "Caixas/Sessões" em torno dos gráficos */
+    .stPlotlyChart, .stDataFrame, .stFoliumContainer {
+        background-color: #FFFFFF; /* Fundo branco para o card */
+        border: 1px solid #DEE2E6; /* Borda cinza clara definida */
+        border-radius: 12px; /* Cantos arredondados */
+        padding: 15px; /* Espaçamento interno */
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05); /* Sombra suave para dar profundidade */
+        margin-bottom: 20px;
+    }
+
+    /* Títulos em cor escura para contraste */
+    h1, h2, h3 { 
+        color: #202124; 
+        font-family: 'Open Sans', sans-serif; 
+        font-weight: 700;
+    }
+
+    /* Sidebar (Barra Lateral) em tom levemente diferente */
+    section[data-testid="stSidebar"] { 
+        background-color: #FFFFFF; 
+        border-right: 1px solid #DEE2E6; 
+    }
+
+    /* Ajuste de cor de labels da sidebar */
+    .st-emotion-cache-16idsys p {
+        color: #3C4043;
+    }
+
+    /* Esconde a barra de ferramentas superior */
+    div[data-testid="stToolbar"] {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
