@@ -1,312 +1,175 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import folium
 from streamlit_folium import st_folium
 from folium.plugins import HeatMap
+import branca.colormap as cm
 import numpy as np
 
-# Configuração da Página para ocupação total
-st.set_page_config(layout="wide", page_title="Relatório dos Resultados controle Aedes - LIV", page_icon="🦟")
+# 1. CONFIGURAÇÃO DA PÁGINA
+st.set_page_config(layout="wide", page_title="Aedes Control Panel", page_icon="🦟")
 
-# --- CSS PERSONALIZADO PARA ESTILO LIGHT PROFESSIONAL (TEMA CLARO) ---
+# 2. CSS PERSONALIZADO (TEMA CLARO E CAIXAS MARCADAS)
 st.markdown("""
     <style>
-    /* Fundo principal da página (Cinza muito claro) */
-    .main { 
-        background-color: #F8F9FA; 
-    }
+    /* Fundo da página cinza claro */
+    .main { background-color: #F0F2F5; }
     
-    /* Estilização dos KPIs (Métricas) */
-    [data-testid="stMetricValue"] { 
-        font-size: 2rem; 
-        color: #1A73E8; /* Azul Google para destaque */
-        font-weight: bold;
-    }
-    
-    /* Estilização das "Caixas/Sessões" em torno dos gráficos */
-    .stPlotlyChart, .stDataFrame, .stFoliumContainer {
-        background-color: #FFFFFF; /* Fundo branco para o card */
-        border: 1px solid #DEE2E6; /* Borda cinza clara definida */
-        border-radius: 12px; /* Cantos arredondados */
-        padding: 15px; /* Espaçamento interno */
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05); /* Sombra suave para dar profundidade */
-        margin-bottom: 20px;
+    /* Estilo de "Card" para as sessões */
+    .stPlotlyChart, .stFoliumContainer, .stDataFrame, .info-card {
+        background-color: #FFFFFF !important;
+        border: 1px solid #D1D5DB !important;
+        border-radius: 12px !important;
+        padding: 10px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+        margin-bottom: 15px;
     }
 
-    /* Títulos em cor escura para contraste */
-    h1, h2, h3 { 
-        color: #202124; 
-        font-family: 'Open Sans', sans-serif; 
-        font-weight: 700;
-    }
+    /* KPIs */
+    [data-testid="stMetricValue"] { color: #1E40AF; font-weight: 800; font-size: 1.8rem; }
+    
+    /* Títulos */
+    h1, h2, h3 { color: #111827; font-family: 'Inter', sans-serif; margin-bottom: 10px; }
 
-    /* Sidebar (Barra Lateral) em tom levemente diferente */
+    /* Sidebar clara */
     section[data-testid="stSidebar"] { 
         background-color: #FFFFFF; 
-        border-right: 1px solid #DEE2E6; 
+        border-right: 1px solid #D1D5DB; 
     }
 
-    /* Ajuste de cor de labels da sidebar */
-    .st-emotion-cache-16idsys p {
-        color: #3C4043;
+    /* Dica Compacta */
+    .small-info {
+        font-size: 0.8rem;
+        padding: 8px;
+        background-color: #EFF6FF;
+        border-left: 4px solid #3B82F6;
+        border-radius: 4px;
+        color: #1E40AF;
+        margin-top: 5px;
     }
-
-    /* Esconde a barra de ferramentas superior */
-    div[data-testid="stToolbar"] {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNÇÃO DE DADOS E PRÉ-PROCESSAMENTO ---
-@st.cache_data(ttl=600) # Atualiza a cada 10 minutos
+# 3. FUNÇÃO DE DADOS E LIMPEZA
+@st.cache_data(ttl=600)
 def load_and_process_data():
-    # ID DA PLANILHA (Verifique se é o correto)
     SHEET_ID = "1g8sAi6kUJnHHxCl97s6JwGDnRF8asTPmmCfWp2qFbEI"
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
-    
     try:
         df = pd.read_csv(url)
-        
-        # --- LIMPEZA E FORMATAÇÃO ---
-        # 1. Converter data
         df['data'] = pd.to_datetime(df['data'], errors='coerce')
-        df = df.dropna(subset=['data']) # Remove datas inválidas
-
-        # 2. Corrigir Colunas Numéricas (Ovos, Lat, Lon)
-        # Se os dados vierem como texto "1.200" ou "22,5", precisamos limpar.
-        cols_numericas = ['ovos', 'lat', 'lon']
-        for col in cols_numericas:
-            if df[col].dtype == 'object': # Se for texto
-                # Remove pontos de milhar, troca vírgula por ponto decimal
+        # Limpeza de números (trata vírgula e ponto)
+        for col in ['ovos', 'lat', 'lon']:
+            if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-            
-            # Converte para float, tratando erros como NaN (Not a Number)
             df[col] = pd.to_numeric(df[col], errors='coerce')
+        return df.dropna(subset=['lat', 'lon', 'ovos', 'data', 'municipio'])
+    except:
+        return pd.DataFrame()
 
-        # 3. Remover linhas onde as coordenadas ou ovos falharam na conversão
-        df = df.dropna(subset=['lat', 'lon', 'ovos'])
-        
-        # 4. Garantir que ovos seja inteiro (opcional, mas bom para a soma)
-        df['ovos'] = df['ovos'].astype(int)
-
-        return df
-    
-    except Exception as e:
-        st.error(f"Erro na conexão ou processamento: {e}")
-        return pd.DataFrame() # Retorna DF vazio em caso de erro
-
-# Tenta carregar os dados processados
 df_raw = load_and_process_data()
 
-# Verifica se os dados foram carregados
 if df_raw.empty:
-    st.error("Não foi possível carregar os dados. Verifique a planilha ou a conexão.")
+    st.error("Erro ao carregar dados. Verifique a conexão e o ID da planilha.")
     st.stop()
 
-# --- LOGIN NA SIDEBAR ---
-# Tenta carregar a imagem, se falhar, usa texto
-try:
-    st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2641/2641409.png", width=80)
-except:
-    st.sidebar.markdown("# 🦟")
-    
-st.sidebar.title("ACESSO RESTRITO")
-
-# Lista de municípios únicos (para o selectbox)
-municipios_disponiveis = df_raw['municipio'].unique()
-user_municipio = st.sidebar.selectbox("Município", municipios_disponiveis)
+# 4. SIDEBAR - LOGIN E FILTROS
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2641/2641409.png", width=60)
+st.sidebar.title("Aedes Control")
+user_municipio = st.sidebar.selectbox("Município", df_raw['municipio'].unique())
 user_password = st.sidebar.text_input("Chave de Acesso", type="password")
 
-# --- VALIDAÇÃO DE SENHA ---
-# Pega a senha real correspondente ao município selecionado
-# Usamos try/except para o caso de não encontrar a senha
+# Validação Simples
 try:
     senha_correta = str(df_raw[df_raw['municipio'] == user_municipio]['senha'].iloc[0]).strip()
-except IndexError:
+except:
     senha_correta = None
 
-# Se a senha estiver correta, carrega o dashboard
-if user_password and user_password.strip() == senha_correta:
-    
-    # --- FILTRAGEM ---
-    df_mun = df_raw[df_raw['municipio'] == user_municipio]
-    
-    # Barra de Filtro de Data Estilizada na Sidebar
-    st.sidebar.markdown("### FILTROS TEMPORAIS")
-    
-    # Cria a coluna de Mês/Ano para o filtro
+if user_password == senha_correta:
+    # Filtros
+    df_mun = df_raw[df_raw['municipio'] == user_municipio].copy()
     df_mun['mes_ano'] = df_mun['data'].dt.strftime('%m/%Y')
-    meses = df_mun['mes_ano'].unique()
+    meses = sorted(df_mun['mes_ano'].unique())
+    filtro_data = st.sidebar.multiselect("Período", options=meses, default=meses[-1] if meses else [])
     
-    # Define o padrão como o mês mais recente
-    default_mes = [meses[0]] if len(meses) > 0 else []
-    
-    filtro_data = st.sidebar.multiselect("Período de Coleta", options=meses, default=default_mes)
-    
-    # Aplica o filtro de data
-    if filtro_data:
-        df_filtered = df_mun[df_mun['mes_ano'].isin(filtro_data)]
-    else:
-        df_filtered = df_mun # Se nada selecionado, mostra tudo do município
+    df_filtered = df_mun[df_mun['mes_ano'].isin(filtro_data)] if filtro_data else df_mun
 
-    # --- HEADER DASHBOARD ---
-    st.markdown(f"<h1 style='text-align: center; color: #00FFCC;'>CENTRAL DE INTELIGÊNCIA EPIDEMIOLÓGICA - {user_municipio.upper()}</h1>", unsafe_allow_html=True)
+    # 5. HEADER E KPIs
+    st.markdown(f"<h1 style='text-align: center; color: #1E40AF;'>PAINEL EPIDEMIOLÓGICO - {user_municipio.upper()}</h1>", unsafe_allow_html=True)
     
-    # Verifica se há dados após o filtro para evitar erros
-    if df_filtered.empty:
-        st.warning("Nenhum dado encontrado para o período selecionado.")
-        st.stop()
-
-    # --- KPIs RÁPIDOS NO TOPO ---
-    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-    
-    # KPI 1: Total de Ovos
-    total_ovos = df_filtered['ovos'].sum()
-    kpi1.metric("Total de Ovos (Período)", f"{int(total_ovos):,}")
-    
-    # KPI 2: Média de Ovos por Amostra
-    media_ovos = df_filtered['ovos'].mean()
-    kpi2.metric("Média/Amostra", f"{media_ovos:.1f}")
-    
-    # KPI 3: Total de Amostras
-    total_amostras = len(df_filtered)
-    kpi3.metric("Amostras Coletadas", f"{total_amostras}")
-    
-    # KPI 4: Média de Ovos por Ponto (Agrupado)
-    # Primeiro agrupamos para ter o total de ovos por localidade única
-    df_pontos_unicos = df_filtered.groupby(['lat', 'lon']).agg({'ovos': 'mean'}).reset_index()
-    media_por_ponto = df_pontos_unicos['ovos'].mean()
-    kpi4.metric("Média/Ponto Único", f"{media_por_ponto:.1f}")
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Total Ovos", f"{int(df_filtered['ovos'].sum()):,}")
+    k2.metric("Média/Amostra", f"{df_filtered['ovos'].mean():.1f}")
+    k3.metric("Amostras", len(df_filtered))
+    k4.metric("Pontos Críticos", len(df_filtered[df_filtered['ovos'] > df_filtered['ovos'].mean()]))
 
     st.markdown("---")
 
-    # --- LAYOUT PRINCIPAL (20% | 60% | 20%) ---
-    col_esq, col_meio, col_dir = st.columns([1.2, 3, 1.2])
+    # 6. LAYOUT PRINCIPAL (1.5 | 2.4 | 1.5)
+    col_esq, col_meio, col_dir = st.columns([1.5, 2.4, 1.5])
 
-    # --- COLUNA ESQUERDA (Gráficos) ---
+    # AGRUPAMENTO PARA MAPA E GRÁFICOS (Média por local)
+    df_mapa = df_filtered.groupby(['lat', 'lon', 'endereco', 'regiao']).agg({'ovos': 'mean'}).reset_index()
+
     with col_esq:
-        # Gráfico 1: Média por Região
-        resumo_regiao = df_filtered.groupby('regiao')['ovos'].mean().reset_index()
-        fig_bar = px.bar(resumo_regiao, x='ovos', y='regiao', orientation='h', 
-                         title="MÉDIA OVOS POR REGIÃO", template="plotly_dark",
-                         labels={'ovos': 'Média Ovos'},
-                         color_discrete_sequence=['#00FFCC'])
-        fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300, margin=dict(l=20, r=20, t=50, b=20))
+        # Barras por Região
+        resumo_reg = df_filtered.groupby('regiao')['ovos'].mean().reset_index()
+        fig_bar = px.bar(resumo_reg, x='ovos', y='regiao', orientation='h', title="MÉDIA POR REGIÃO", 
+                         template="plotly_white", color_discrete_sequence=['#3B82F6'])
+        fig_bar.update_layout(height=280, margin=dict(l=10, r=10, t=40, b=10), paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_bar, use_container_width=True)
 
-        # Gráfico 2: Evolução Temporal (Diária/Semanal)
-        # Resumimos por data
-        resumo_tempo = df_filtered.groupby(df_filtered['data'].dt.date)['ovos'].sum().reset_index()
-        resumo_tempo.columns = ['data', 'total_ovos']
-        
-        fig_line = px.line(resumo_tempo, x='data', y='total_ovos', title="TENDÊNCIA TEMPORAL (TOTAL)",
-                           template="plotly_dark", labels={'total_ovos': 'Total Ovos'})
-        fig_line.update_traces(line_color='#FF00FF', line_width=3)
-        fig_line.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300, margin=dict(l=20, r=20, t=50, b=20))
+        # Evolução Temporal
+        resumo_time = df_filtered.groupby(df_filtered['data'].dt.date)['ovos'].sum().reset_index()
+        fig_line = px.line(resumo_time, x='data', y='ovos', title="TENDÊNCIA TEMPORAL", template="plotly_white")
+        fig_line.update_traces(line_color='#EF4444', line_width=2)
+        fig_line.update_layout(height=280, margin=dict(l=10, r=10, t=40, b=10), paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_line, use_container_width=True)
 
-# --- COLUNA MEIO (Mapa Claro com Cores e Transparência) ---
     with col_meio:
-        st.markdown("<h3 style='text-align: center; color: #333;'>MAPA DINÂMICO DE INFESTAÇÃO</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center;'>MAPA DE CALOR E PONTOS</h3>", unsafe_allow_html=True)
+        centro = [df_mapa['lat'].mean(), df_mapa['lon'].mean()]
+        m = folium.Map(location=centro, zoom_start=14, tiles="CartoDB positron")
         
-        # CORREÇÃO DO ERRO: Incluímos 'regiao' no groupby para que ela não desapareça
-        df_mapa = df_filtered.groupby(['lat', 'lon', 'endereco', 'regiao']).agg({
-            'ovos': 'mean'
-        }).reset_index()
-
-        centro_lat = df_mapa['lat'].mean()
-        centro_lon = df_mapa['lon'].mean()
+        # Escala de cor Azul -> Vermelho
+        v_min, v_max = df_mapa['ovos'].min(), df_mapa['ovos'].max()
+        if v_min == v_max: v_max += 1
+        colormap = cm.LinearColormap(colors=['blue', 'lime', 'yellow', 'red'], vmin=v_min, vmax=v_max)
         
-        m = folium.Map(location=[centro_lat, centro_lon], zoom_start=14, tiles="CartoDB positron")
-        
-        # Escala de cor
-        import branca.colormap as cm
-        max_ovos = df_mapa['ovos'].max() if df_mapa['ovos'].max() > 0 else 1
-        colormap = cm.LinearColormap(
-            colors=['blue', 'lime', 'yellow', 'red'],
-            vmin=df_mapa['ovos'].min(), 
-            vmax=max_ovos
-        )
-        
+        # Marcadores individuais com TRANSPARÊNCIA
         for _, row in df_mapa.iterrows():
-            cor_ponto = colormap(row['ovos'])
-            
             folium.CircleMarker(
                 location=[row['lat'], row['lon']],
-                radius=10, 
-                color=cor_ponto,     # Cor da borda igual ao preenchimento
-                weight=1.5,
+                radius=10,
+                color=colormap(row['ovos']),
                 fill=True,
-                fill_color=cor_ponto,
-                fill_opacity=0.4,    # MAIOR TRANSPARÊNCIA (ajustado de 0.9 para 0.4)
+                fill_color=colormap(row['ovos']),
+                fill_opacity=0.4, # Transparência solicitada
                 popup=f"<b>{row['endereco']}</b><br>Média: {row['ovos']:.1f}",
                 tooltip=f"{row['ovos']:.1f} ovos"
             ).add_to(m)
             
         m.add_child(colormap)
-        st_folium(m, width="100%", height=620, returned_objects=[])
-   
-# --- COLUNA DIREITA (Gráficos e Alertas) ---
+        st_folium(m, width="100%", height=600, returned_objects=[])
+
     with col_dir:
-        # 1. Gráfico de Pizza: Intensidade por Região
-        # O df_mapa agora tem a coluna 'regiao' vinda do groupby anterior
+        # Pizza de Distribuição
         resumo_pie = df_mapa.groupby('regiao')['ovos'].mean().reset_index()
-        
-        fig_pie = px.pie(
-            resumo_pie, 
-            values='ovos', 
-            names='regiao', 
-            hole=0.5,
-            title="INTENSIDADE MÉDIA %",
-            template="plotly_white", # Mudado para combinar com o mapa claro
-            color_discrete_sequence=px.colors.qualitative.Safe
-        )
-        
-        fig_pie.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)', 
-            plot_bgcolor='rgba(0,0,0,0)', 
-            height=300,
-            margin=dict(l=10, r=10, t=40, b=10)
-        )
+        fig_pie = px.pie(resumo_pie, values='ovos', names='regiao', hole=0.5, 
+                         title="DISTRIBUIÇÃO INTENSIDADE %", template="plotly_white")
+        fig_pie.update_layout(height=280, showlegend=False, margin=dict(l=10, r=10, t=40, b=10), paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_pie, use_container_width=True)
 
-        # 2. Tabela de Alertas Críticos (Top 5)
-        st.markdown("### 🚨 PONTOS CRÍTICOS")
-        
-        # Pegamos os 5 maiores valores de média de ovos
+        # Tabela Top Focos
+        st.markdown("### 🚨 TOP FOCOS (Média)")
         top_5 = df_mapa.nlargest(5, 'ovos')[['endereco', 'ovos', 'regiao']]
+        st.dataframe(top_5, hide_index=True, use_container_width=True, 
+                     column_config={"endereco": "Local", "ovos": "Média", "regiao": "Região"})
         
-        # Arredondamos para facilitar a leitura
-        top_5['ovos'] = top_5['ovos'].round(1)
-        
-        # CORREÇÃO DO ERRO: 
-        # Removido o argumento 'columns={...}' que causava o erro e usado 'column_config'
-        st.dataframe(
-            top_5, 
-            hide_index=True, 
-            use_container_width=True,
-            column_config={
-                "endereco": "Endereço",
-                "ovos": "Média Ovos",
-                "regiao": "Região"
-            }
-        )
-        
-        st.success("💡 Se necessitarem de alguma informação a mais no relatório ou alguma ajuda, favor entrar em contato com o LIV. E-mail: -----@gmail.com.")
+        # Dica Compacta
+        st.markdown('<div class="small-info"><b>Dica:</b> Cores variam do Azul (Baixo) ao Vermelho (Crítico).</div>', unsafe_allow_html=True)
 
 else:
-    # Se o usuário tentou digitar algo e errou
-    if user_password:
-        st.sidebar.error("CHAVE INVÁLIDA")
-    st.warning("⚠️ Aguardando autenticação para carregar dados.")
-    
-    # Adiciona um placeholder ou instruções
-    st.markdown("""
-        ## Bem-vindo ao Aedes Control Panel
-        Este painel exibe dados epidemiológicos de infestação de *Aedes aegypti*.
-        
-        **Para acessar:**
-        1. Selecione seu Município na barra lateral.
-        2. Digite a Chave de Acesso autorizada.
-    """)
+    if user_password: st.sidebar.error("CHAVE INCORRETA")
+    st.warning("🔒 Digite a chave de acesso para carregar os dados do município.")
