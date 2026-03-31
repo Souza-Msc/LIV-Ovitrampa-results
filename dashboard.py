@@ -128,7 +128,7 @@ if user_password == senha_correta:
         st.plotly_chart(fig_line, use_container_width=True)
 
     with col_meio:
-        st.markdown("<h2 style='text-align: center;'>MAPA DE INFESTAÇÃO</h2>", unsafe_allow_html=True)
+        st.markdown("<h4 style='text-align: center;'>MAPA DE INFESTAÇÃO</h4>", unsafe_allow_html=True)
         
         # O Mapa agora reside dentro de um container que herdará o estilo de borda
         centro_mapa = [df_mapa['lat'].mean(), df_mapa['lon'].mean()]
