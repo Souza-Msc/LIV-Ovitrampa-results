@@ -210,27 +210,6 @@ if user_password and user_password.strip() == senha_correta:
             
         m.add_child(colormap)
         st_folium(m, width="100%", height=620, returned_objects=[])
-
-    # --- COLUNA DIREITA (Gráficos) ---
-   # with col_dir:
-   #     # Agora o df_mapa contém a coluna 'regiao', então o erro no pie chart sumirá
-   #     resumo_pie = df_mapa.groupby('regiao')['ovos'].mean().reset_index()
-   #     
-   #     fig_pie = px.pie(resumo_pie, values='ovos', names='regiao', hole=0.6,
-   #                      title="INTENSIDADE POR REGIÃO (%)",
-   #                      color_discrete_sequence=px.colors.qualitative.Safe)
-        
-   #     fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300)
-   #     st.plotly_chart(fig_pie, use_container_width=True)
-
-   #     st.markdown("### TOP 5 FOCOS")
-   #     top_5 = df_mapa.nlargest(5, 'ovos')[['endereco', 'ovos']]
-   #     st.dataframe(top_5, hide_index=True, use_container_width=True)
-        
-   #     # Exibe o DataFrame limpo
-   #     st.dataframe(top_5[['endereco', 'ovos']], hide_index=True, use_container_width=True)
-        
-   #     st.info(f"💡 Dica: No mapa, a cor representa a intensidade: Azul é baixo, Vermelho é alto.")
    
 # --- COLUNA DIREITA (Gráficos e Alertas) ---
     with col_dir:
