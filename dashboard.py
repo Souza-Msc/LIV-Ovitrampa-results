@@ -91,8 +91,6 @@ if user_password == senha_correta:
     df_filtered = df_mun[df_mun['mes_ano'].isin(filtro_data)] if filtro_data else df_mun
 
     # 5. HEADER DASHBOARD
-
-    st.markdown("---")
     st.markdown(f"<h1 style='text-align: center; color: #1E40AF;'>Laboratório de Identificação de Vetores</h1>", unsafe_allow_html=True)
     st.markdown(f"<h2 style='text-align: center; color: #1E40AF;'>Dados Ovitrampas - {user_municipio.upper()}</h2>", unsafe_allow_html=True)
 
