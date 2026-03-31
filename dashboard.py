@@ -257,7 +257,7 @@ if user_password and user_password.strip() == senha_correta:
             }
         )
         
-        st.success("💡 Os pontos em vermelho no mapa exigem ação imediata da equipe de campo.")
+        st.success("💡 Se necessitarem de alguma informação a mais no relatório ou alguma ajuda, favor entrar em contato com o LIV. E-mail: -----@gmail.com.")
 
 else:
     # Se o usuário tentou digitar algo e errou
