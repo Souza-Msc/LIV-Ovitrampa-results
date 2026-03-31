@@ -22,7 +22,7 @@ st.markdown("""
         border-radius: 12px !important;
         padding: 10px !important;
         box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
-        margin-bottom: 20px !important;
+        margin-bottom: 120px !important;
     }
 
     /* Ajuste para o mapa não "vazar" para fora da borda arredondada */
