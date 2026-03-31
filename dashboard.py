@@ -19,7 +19,7 @@ st.markdown("""
     .stPlotlyChart, .stDataFrame, .stFoliumContainer, [data-testid="stVerticalBlock"] > .element-container:has(.stFoliumContainer) {
         background-color: #FFFFFF !important;
         border: 1px solid #D1D5DB !important;
-        border-radius: 5px !important;
+        border-radius: 12px !important;
         padding: 10px !important;
         box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
         margin-bottom: 20px !important;
