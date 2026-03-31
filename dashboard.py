@@ -95,7 +95,7 @@ if user_password == senha_correta:
         centro_lon = df_filtered['lon'].mean()
         
         # Estilo CartoDB Dark Matter para o mapa
-        m = folium.Map(location=[centro_lat, centro_lon], zoom_start=13, tiles='CartoDB dark_matter')
+        m = folium.Map(location=[centro_lat, centro_lon], zoom_start=13)
         
         # Camada de Calor (Heatmap)
         heat_data = [[row['lat'], row['lon'], row['ovos']] for index, row in df_filtered.iterrows()]
