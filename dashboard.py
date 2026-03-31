@@ -232,27 +232,53 @@ if user_password and user_password.strip() == senha_correta:
         
         st.info(f"💡 Dica: No mapa, a cor representa a intensidade: Azul é baixo, Vermelho é alto.")
    
-    # --- COLUNA DIREITA (Outras Análises) ---
+# --- COLUNA DIREITA (Gráficos e Alertas) ---
     with col_dir:
-        # Gráfico 3: Distribuição % por Região
-        # Usamos o total de ovos aqui
-        resumo_pie = df_filtered.groupby('regiao')['ovos'].sum().reset_index()
-        fig_pie = px.pie(resumo_pie, values='ovos', names='regiao', hole=0.6,
-                         title="DISTRIBUIÇÃO TOTAL %", template="plotly_dark",
-                         color_discrete_sequence=px.colors.qualitative.Pastel)
-        fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300, margin=dict(l=20, r=20, t=50, b=20))
-        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+        # 1. Gráfico de Pizza: Intensidade por Região
+        # O df_mapa agora tem a coluna 'regiao' vinda do groupby anterior
+        resumo_pie = df_mapa.groupby('regiao')['ovos'].mean().reset_index()
+        
+        fig_pie = px.pie(
+            resumo_pie, 
+            values='ovos', 
+            names='regiao', 
+            hole=0.5,
+            title="INTENSIDADE MÉDIA %",
+            template="plotly_white", # Mudado para combinar com o mapa claro
+            color_discrete_sequence=px.colors.qualitative.Safe
+        )
+        
+        fig_pie.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)', 
+            plot_bgcolor='rgba(0,0,0,0)', 
+            height=300,
+            margin=dict(l=10, r=10, t=40, b=10)
+        )
         st.plotly_chart(fig_pie, use_container_width=True)
 
-        # Gráfico 4: Top Focos (Maiores Médias por Ponto)
-        st.markdown("### TOP 5 FOCOS (Média)")
-        top_5 = df_pontos_unicos.nlargest(5, 'ovos').reset_index(drop=True)
+        # 2. Tabela de Alertas Críticos (Top 5)
+        st.markdown("### 🚨 PONTOS CRÍTICOS")
         
-        # Arredonda a média para 1 casa decimal
+        # Pegamos os 5 maiores valores de média de ovos
+        top_5 = df_mapa.nlargest(5, 'ovos')[['endereco', 'ovos', 'regiao']]
+        
+        # Arredondamos para facilitar a leitura
         top_5['ovos'] = top_5['ovos'].round(1)
-        st.dataframe(top_5, hide_index=True, use_container_width=True, columns={'lat': 'Lat', 'lon': 'Lon', 'ovos': 'Média Ovos'})
         
-        st.info(f"💡 Dica: No mapa, o tamanho do ponto Cyan representa a média de ovos naquele endereço.")
+        # CORREÇÃO DO ERRO: 
+        # Removido o argumento 'columns={...}' que causava o erro e usado 'column_config'
+        st.dataframe(
+            top_5, 
+            hide_index=True, 
+            use_container_width=True,
+            column_config={
+                "endereco": "Endereço",
+                "ovos": "Média Ovos",
+                "regiao": "Região"
+            }
+        )
+        
+        st.success("💡 Os pontos em vermelho no mapa exigem ação imediata da equipe de campo.")
 
 else:
     # Se o usuário tentou digitar algo e errou
