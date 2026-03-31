@@ -28,7 +28,7 @@ st.markdown("""
 
     /* Ajuste para o mapa interno acompanhar o arredondamento da caixa */
     .stFoliumContainer iframe {
-        border-radius: 8px !important;
+        border-radius: 20px !important;
     }
 
     /* Estilização dos KPIs (Métricas) */
