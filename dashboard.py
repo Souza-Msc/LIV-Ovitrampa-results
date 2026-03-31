@@ -89,29 +89,41 @@ if user_password == senha_correta:
         st.plotly_chart(fig_line, use_container_width=True)
 
     with col_meio:
-        # MAPA DARK COM HEATMAP
         st.markdown("<h3 style='text-align: center;'>MAPA DINÂMICO DE INFESTAÇÃO</h3>", unsafe_allow_html=True)
-        centro_lat = df_filtered['lat'].mean()
-        centro_lon = df_filtered['lon'].mean()
         
-        # Estilo CartoDB Dark Matter para o mapa
-        m = folium.Map(location=[centro_lat, centro_lon], zoom_start=13)
+        # --- LÓGICA DE AGREGAÇÃO PARA OS PONTOS ---
+        # Agrupamos por coordenadas e endereço para tirar a média se houver mais de uma amostra
+        df_mapa = df_filtered.groupby(['lat', 'lon', 'endereco']).agg({
+            'ovos': 'mean'
+        }).reset_index()
+
+        centro_lat = df_mapa['lat'].mean()
+        centro_lon = df_mapa['lon'].mean()
         
-        # Camada de Calor (Heatmap)
-        heat_data = [[row['lat'], row['lon'], row['ovos']] for index, row in df_filtered.iterrows()]
-        HeatMap(heat_data, radius=15, blur=10, gradient={0.4: 'blue', 0.65: 'lime', 1: 'red'}).add_to(m)
+        m = folium.Map(location=[centro_lat, centro_lon], zoom_start=13, tiles="CartoDB dark_matter")
         
-        # Marcadores individuais
-        for _, row in df_filtered.iterrows():
+        # Camada de Calor (Heatmap) - continua usando os dados filtrados
+        heat_data = [[row['lat'], row['lon'], row['ovos']] for index, row in df_mapa.iterrows()]
+        HeatMap(heat_data, radius=15, blur=10).add_to(m)
+        
+        # Marcadores individuais com TAMANHO VARIÁVEL
+        for _, row in df_mapa.iterrows():
+            # Definindo o tamanho do ponto: 
+            # Usamos uma regra simples: a raiz quadrada da média de ovos * um multiplicador
+            # Isso evita que pontos com muitos ovos fiquem gigantescos
+            tamanho_ponto = (row['ovos'] ** 0.5) * 2  
+            
             folium.CircleMarker(
                 location=[row['lat'], row['lon']],
-                radius=5,
+                radius=max(tamanho_ponto, 3), # Mínimo de 3 pixels para ser visível
                 color="#00FFCC",
-                popup=f"{row['endereco']}: {row['ovos']} ovos",
+                fill_color="#00FFCC",
+                fill_opacity=0.6,
+                popup=f"<b>Endereço:</b> {row['endereco']}<br><b>Média de Ovos:</b> {row['ovos']:.2f}",
                 fill=True
             ).add_to(m)
             
-        st_folium(m, width="100%", height=620)
+        st_folium(m, width="100%", height=620, returned_objects=[])
 
     with col_dir:
         # Gráfico 3: Distribuição (Donut Neon)
