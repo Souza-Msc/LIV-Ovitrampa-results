@@ -11,7 +11,7 @@ st.set_page_config(layout="wide", page_title="Monitoramento Aedes Aegypti")
 # --- FUNÇÃO PARA CARREGAR DADOS DO GOOGLE SHEETS ---
 def load_data():
     # Substitua pelo ID da sua planilha
-    SHEET_ID = "SEU_ID_DA_PLANILHA_AQUI"
+    SHEET_ID = "1g8sAi6kUJnHHxCl97s6JwGDnRF8asTPmmCfWp2qFbEI"
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
     df = pd.read_csv(url)
     df['data'] = pd.to_datetime(df['data'])
