@@ -124,7 +124,7 @@ if user_password == senha_correta:
         resumo_time = df_filtered.groupby(df_filtered['data'].dt.date)['ovos'].sum().reset_index()
         fig_line = px.line(resumo_time, x='data', y='ovos', title="TENDÊNCIA (SOMA)", template="plotly_white")
         fig_line.update_traces(line_color='#EF4444', line_width=2)
-        fig_line.update_layout(height=280, margin=dict(l=10, r=10, t=40, b=10), paper_bgcolor='rgba(0,0,0,0)')
+        fig_line.update_layout(height=280, margin=dict(l=10, r=30, t=40, b=40), paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_line, use_container_width=True)
 
     with col_meio:
