@@ -16,29 +16,24 @@ st.markdown("""
     /* Fundo da página cinza claro */
     .main { background-color: #F0F2F5; }
     
-    /* Estilo de "Card" para as sessões */
-    .stPlotlyChart, .stFoliumContainer, .stDataFrame, .info-card {
+    /* ESTILO DE CAIXA: Aplicado a Gráficos, Mapas e Tabelas */
+    .stPlotlyChart, .stDataFrame, .stFoliumContainer {
         background-color: #FFFFFF !important;
-        border: 1px solid #D1D5DB !important;
+        border: 1px solid #D1D5DB !important; /* Borda cinza marcada */
         border-radius: 12px !important;
-        padding: 10px !important;
+        padding: 15px !important; /* Espaço entre a borda e o conteúdo */
         box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
-        margin-bottom: 15px;
+        margin-bottom: 20px;
     }
 
-    /* KPIs */
-    [data-testid="stMetricValue"] { color: #1E40AF; font-weight: 800; font-size: 1.8rem; }
+    /* Ajuste específico para o mapa preencher bem a caixa */
+    .stFoliumContainer iframe {
+        border-radius: 8px !important;
+    }
+
+    [data-testid="stMetricValue"] { color: #1E40AF; font-weight: 800; }
+    h1, h2, h3 { color: #111827; font-family: 'Inter', sans-serif; }
     
-    /* Títulos */
-    h1, h2, h3 { color: #111827; font-family: 'Inter', sans-serif; margin-bottom: 10px; }
-
-    /* Sidebar clara */
-    section[data-testid="stSidebar"] { 
-        background-color: #FFFFFF; 
-        border-right: 1px solid #D1D5DB; 
-    }
-
-    /* Dica Compacta */
     .small-info {
         font-size: 0.8rem;
         padding: 8px;
@@ -46,7 +41,6 @@ st.markdown("""
         border-left: 4px solid #3B82F6;
         border-radius: 4px;
         color: #1E40AF;
-        margin-top: 5px;
     }
     </style>
     """, unsafe_allow_html=True)
