@@ -126,7 +126,7 @@ if user_password == senha_correta:
     
     # KPIs Rápidos
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric(f"Total de amostras de {user_municipio.upper() no período selecionado}", f"{len(df_mun_base)}")
+    k1.metric(f"Total de amostras de {user_municipio.upper()} no período selecionado", f"{len(df_mun_base)}")
     k2.metric("Total de amostras de {filtro_tipo} no período selecionado", len(df_filtered))
     k3.metric("Média de registros no período selecionado", f"{df_filtered['contagem'].mean():.1f}")
     k4.metric("Total de registros no período selecionado", f"{int(df_filtered['contagem'].sum()):,}")
