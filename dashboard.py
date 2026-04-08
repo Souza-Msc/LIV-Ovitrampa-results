@@ -36,17 +36,22 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # 3. CARREGAMENTO E TRATAMENTO DE DADOS
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def load_and_process_data():
     SHEET_ID = "1g8sAi6kUJnHHxCl97s6JwGDnRF8asTPmmCfWp2qFbEI"
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
     try:
         df = pd.read_csv(url)
-        # Renomeando ovos para contagem (caso a planilha ainda use o nome antigo)
+        
+        # Padroniza nomes de colunas para minúsculo e remove espaços extras
+        df.columns = [c.strip().lower() for c in df.columns]
+        
+        # Renomeia 'ovos' para 'contagem' se ainda existir o nome antigo
         if 'ovos' in df.columns:
             df = df.rename(columns={'ovos': 'contagem'})
-        
-        df['data'] = pd.to_datetime(df['data'], errors='coerce')
+            
+        # Conversão de data
+        df['data'] = pd.to_datetime(df['data'], dayfirst=True, errors='coerce')
         
         # Limpeza e conversão numérica
         for col in ['contagem', 'lat', 'lon']:
@@ -55,9 +60,11 @@ def load_and_process_data():
                     df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         
-        return df.dropna(subset=['lat', 'lon', 'contagem', 'data', 'municipio', 'tipo'])
+        # Colunas essenciais que não podem ser nulas
+        cols_essenciais = ['lat', 'lon', 'contagem', 'data', 'municipio', 'tipo']
+        return df.dropna(subset=[c for c in cols_essenciais if c in df.columns])
     except Exception as e:
-        st.error(f"Erro ao processar dados: {e}")
+        st.error(f"Erro ao carregar dados: {e}")
         return pd.DataFrame()
 
 df_raw = load_and_process_data()
@@ -66,57 +73,66 @@ if df_raw.empty:
     st.error("Não foi possível carregar os dados. Verifique a planilha ou a conexão.")
     st.stop()
 
-# 4. SIDEBAR (Login e Filtros)
+# 4. SIDEBAR (Login e Filtros Hierárquicos)
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2641/2641409.png", width=60)
 st.sidebar.title("Painel de Controle")
 
-user_municipio = st.sidebar.selectbox("Selecione o Município", sorted(df_raw['municipio'].unique()))
+# 4.1 Seleção de Município (Lê de todos os dados disponíveis)
+lista_municipios = sorted(df_raw['municipio'].unique())
+user_municipio = st.sidebar.selectbox("Município", lista_municipios)
+
 user_password = st.sidebar.text_input("Chave de Acesso", type="password")
 
-# Validação de senha
+# Validação de senha baseada no município
 try:
-    senha_correta = str(df_raw[df_raw['municipio'] == user_municipio]['senha'].iloc[0]).strip()
+    df_mun_base = df_raw[df_raw['municipio'] == user_municipio]
+    senha_correta = str(df_mun_base['senha'].iloc[0]).strip()
 except:
     senha_correta = None
 
 if user_password == senha_correta:
-    # Filtros Adicionais
-    df_mun = df_raw[df_raw['municipio'] == user_municipio].copy()
+    # 4.2 Seleção de Tipo (Baseado no município selecionado)
+    lista_tipos = sorted(df_mun_base['tipo'].unique())
+    filtro_tipo = st.sidebar.selectbox("Tipo de Amostra", lista_tipos)
     
-    # --- NOVO FILTRO: TIPO DE AMOSTRA ---
-    tipos_disponiveis = sorted(df_mun['tipo'].unique())
-    filtro_tipo = st.sidebar.selectbox("Tipo de Amostra", tipos_disponiveis)
+    # 4.3 Seleção de Período (Baseado no município + tipo)
+    df_tipo_mun = df_mun_base[df_mun_base['tipo'] == filtro_tipo].copy()
+    df_tipo_mun['mes_ano'] = df_tipo_mun['data'].dt.strftime('%m/%Y')
     
-    # Filtro de Data
-    df_mun['mes_ano'] = df_mun['data'].dt.strftime('%m/%Y')
-    meses_lista = sorted(df_mun['mes_ano'].unique())
-    filtro_data = st.sidebar.multiselect("Período de Coleta", options=meses_lista, default=meses_lista[-1:] if meses_lista else [])
+    meses_lista = sorted(df_tipo_mun['mes_ano'].unique())
+    filtro_data = st.sidebar.multiselect(
+        "Período de Coleta", 
+        options=meses_lista, 
+        default=meses_lista[-1:] if meses_lista else []
+    )
     
-    # Aplicação dos Filtros
-    df_filtered = df_mun[df_mun['tipo'] == filtro_tipo]
+    # DataFrame filtrado final para os gráficos
     if filtro_data:
-        df_filtered = df_filtered[df_filtered['mes_ano'].isin(filtro_data)]
+        df_filtered = df_tipo_mun[df_tipo_mun['mes_ano'].isin(filtro_data)]
+    else:
+        df_filtered = df_tipo_mun
 
-    # 5. HEADER DASHBOARD DINÂMICO
+    # 5. HEADER DASHBOARD
     st.markdown(f"<h1 style='text-align: center; color: #1E40AF;'>Laboratório de Identificação de Vetores</h1>", unsafe_allow_html=True)
-    # Subtítulo alterado conforme sua solicitação
     st.markdown(f"<h2 style='text-align: center; color: #4B5563;'>Dados {filtro_tipo} - {user_municipio.upper()}</h2>", unsafe_allow_html=True)
 
     st.markdown("---")
     
-    # KPIs rápidos (Atualizados para 'contagem')
+    # KPIs rápidos
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Total Contagem", f"{int(df_filtered['contagem'].sum()):,}")
-    k2.metric("Média/Amostra", f"{df_filtered['contagem'].mean():.1f}")
-    k3.metric("Amostras Coletadas", len(df_filtered))
-    k4.metric("Máximo Registrado", f"{df_filtered['contagem'].max():.0f}")
+    total = df_filtered['contagem'].sum()
+    media = df_filtered['contagem'].mean()
+    k1.metric("Total Acumulado", f"{int(total):,}")
+    k2.metric("Média por Ponto", f"{media:.1f}")
+    k3.metric("Amostras Analisadas", len(df_filtered))
+    k4.metric("Máximo no Período", f"{df_filtered['contagem'].max():.0f}")
 
     st.markdown("---")
 
     # 6. LAYOUT PRINCIPAL
     col_esq, col_meio, col_dir = st.columns([1.5, 2.4, 1.5])
 
-    # Agrupamento para o Mapa
+    # Agrupamento para o Mapa (Média por local)
     df_mapa = df_filtered.groupby(['lat', 'lon', 'endereco', 'regiao']).agg({'contagem': 'mean'}).reset_index()
 
     with col_esq:
@@ -139,9 +155,11 @@ if user_password == senha_correta:
         st.markdown("<h4 style='text-align: center;'>MAPA DE INFESTAÇÃO</h4>", unsafe_allow_html=True)
         
         if not df_mapa.empty:
-            centro_mapa = [df_mapa['lat'].mean(), df_mapa['lon'].mean()]
-            m = folium.Map(location=centro_mapa, zoom_start=14, tiles="CartoDB positron")
+            centro_lat = df_mapa['lat'].mean()
+            centro_lon = df_mapa['lon'].mean()
+            m = folium.Map(location=[centro_lat, centro_lon], zoom_start=14, tiles="CartoDB positron")
             
+            # Escala de Cores
             v_min, v_max = df_mapa['contagem'].min(), df_mapa['contagem'].max()
             if v_min == v_max: v_max += 1
             colormap = cm.LinearColormap(colors=['blue', 'lime', 'yellow', 'red'], vmin=v_min, vmax=v_max)
@@ -153,19 +171,19 @@ if user_password == senha_correta:
                     color=colormap(row['contagem']),
                     fill=True,
                     fill_color=colormap(row['contagem']),
-                    fill_opacity=0.4,
+                    fill_opacity=0.6,
                     weight=1.5,
                     popup=f"<b>Endereço:</b> {row['endereco']}<br><b>Média:</b> {row['contagem']:.1f}",
-                    tooltip=f"{row['contagem']:.1f} unidades"
+                    tooltip=f"{row['contagem']:.1f}"
                 ).add_to(m)
             
             m.add_child(colormap)
             st_folium(m, width="100%", height=650, returned_objects=[])
         else:
-            st.info("Sem dados geográficos para os filtros selecionados.")
+            st.warning("Sem dados geográficos para exibir no mapa.")
         
     with col_dir:
-        # Gráfico 3: Distribuição
+        # Gráfico 3: Distribuição %
         resumo_pie = df_mapa.groupby('regiao')['contagem'].mean().reset_index()
         fig_pie = px.pie(resumo_pie, values='contagem', names='regiao', hole=0.5, 
                          title="DISTRIBUIÇÃO %", template="plotly_white")
@@ -187,10 +205,9 @@ if user_password == senha_correta:
                 "regiao": "Região"
             }
         )
-        
-        st.markdown(f'<div class="small-info">Exibindo resultados para: <b>{filtro_tipo}</b></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="small-info">Filtrado por: <b>{filtro_tipo}</b></div>', unsafe_allow_html=True)
 
 else:
     if user_password:
         st.sidebar.error("CHAVE DE ACESSO INVÁLIDA")
-    st.warning("⚠️ Aguardando autenticação para carregar os dados governamentais.")
+    st.warning("⚠️ Insira a chave de acesso do município para visualizar os dados.")
