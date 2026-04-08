@@ -10,37 +10,10 @@ import time
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(layout="wide", page_title="Relatório de Vetores", page_icon="🦟")
 
-# 2. CSS PERSONALIZADO
-st.markdown("""
-    <style>
-    .main { background-color: #F0F2F5; }
-    .stPlotlyChart, .stDataFrame, .stFoliumContainer, [data-testid="stVerticalBlock"] > .element-container:has(.stFoliumContainer) {
-        background-color: #FFFFFF !important;
-        border: 1px solid #D1D5DB !important;
-        border-radius: 12px !important;
-        padding: 10px !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
-        margin-bottom: 20px !important;
-    }
-    .stFoliumContainer iframe { border-radius: 8px !important; }
-    [data-testid="stMetricValue"] { color: #1E40AF; font-weight: 800; }
-    h1, h2, h3 { color: #111827; font-family: 'Inter', sans-serif; }
-    .small-info {
-        font-size: 0.8rem;
-        padding: 8px;
-        background-color: #EFF6FF;
-        border-left: 4px solid #3B82F6;
-        border-radius: 4px;
-        color: #1E40AF;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# 3. CARREGAMENTO E TRATAMENTO DE DADOS
-@st.cache_data(ttl=10) # Cache curto de 10 segundos
+# 2. CARREGAMENTO E TRATAMENTO DE DADOS
+@st.cache_data(ttl=10)
 def load_and_process_data(timestamp):
     SHEET_ID = "1g8sAi6kUJnHHxCl97s6JwGDnRF8asTPmmCfWp2qFbEI"
-    # O parâmetro tqx e cache_bust forçam o Google a enviar a versão mais recente
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&cache_bust={timestamp}"
     
     try:
@@ -50,120 +23,106 @@ def load_and_process_data(timestamp):
         if 'ovos' in df.columns:
             df = df.rename(columns={'ovos': 'contagem'})
             
-        df['data'] = pd.to_datetime(df['data'], dayfirst=True, errors='coerce')
+        # AJUSTE 1: Conversão de data respeitando o formato ISO (YYYY-MM-DD)
+        # Isso evita que o Python inverta dia com mês
+        df['data'] = pd.to_datetime(df['data'], errors='coerce')
         
+        # Limpeza de números
         for col in ['contagem', 'lat', 'lon']:
             if col in df.columns:
                 if df[col].dtype == 'object':
                     df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         
-        # Preenche tipos vazios com 'Não Informado' para não perder a linha no dropna
-        if 'tipo' in df.columns:
-            df['tipo'] = df['tipo'].fillna('Não Informado').astype(str).str.strip()
-            
-        # Colunas que REALMENTE não podem ser nulas (se a lat/lon for nula, o mapa quebra)
-        cols_criticas = ['lat', 'lon', 'municipio']
-        df_clean = df.dropna(subset=cols_criticas)
+        # AJUSTE 2: Preenchimento de nulos para não deletar a linha no dropna
+        df['tipo'] = df['tipo'].fillna('Não Informado').astype(str)
+        df['contagem'] = df['contagem'].fillna(0)
         
-        return df, df_clean
+        # Mantemos apenas o que tem localização e município
+        df_clean = df.dropna(subset=['lat', 'lon', 'municipio'])
+        
+        return df_clean
     except Exception as e:
-        st.error(f"Erro ao carregar dados: {e}")
-        return pd.DataFrame(), pd.DataFrame()
+        st.error(f"Erro ao carregar: {e}")
+        return pd.DataFrame()
 
-# Usamos o tempo atual como chave para o cache
-df_bruto, df_raw = load_and_process_data(int(time.time()))
+df_raw = load_and_process_data(int(time.time()))
 
-if df_raw.empty:
-    st.error("Não foi possível carregar os dados. Verifique as colunas 'lat', 'lon' e 'municipio' na planilha.")
-    st.stop()
-
-# 4. SIDEBAR
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2641/2641409.png", width=60)
+# 3. SIDEBAR E FILTROS
 st.sidebar.title("Painel de Controle")
 
-# Botão de atualização manual
-if st.sidebar.button("🔄 Forçar Atualização"):
+if st.sidebar.button("🔄 Atualizar Dados"):
     st.cache_data.clear()
     st.rerun()
 
 lista_municipios = sorted(df_raw['municipio'].unique())
 user_municipio = st.sidebar.selectbox("Município", lista_municipios)
-
 user_password = st.sidebar.text_input("Chave de Acesso", type="password")
 
+# Validação de senha
 try:
-    df_mun_base = df_raw[df_raw['municipio'] == user_municipio]
+    df_mun_base = df_raw[df_raw['municipio'] == user_municipio].copy()
     senha_correta = str(df_mun_base['senha'].iloc[0]).strip()
 except:
     senha_correta = None
 
 if user_password == senha_correta:
-    # Mostra status dos dados
-    total_mun = len(df_mun_base)
-    st.sidebar.success(f"Carregadas {total_mun} amostras para {user_municipio}.")
-
-    # Filtro de Tipo
+    # AJUSTE 3: Filtro de Tipo (Garante que pegue todos os dados do município)
     lista_tipos = sorted(df_mun_base['tipo'].unique())
     filtro_tipo = st.sidebar.selectbox("Tipo de Amostra", lista_tipos)
     
-    # Filtro de Data
     df_tipo_mun = df_mun_base[df_mun_base['tipo'] == filtro_tipo].copy()
-   
-    # 1. Criamos a coluna mes_ano
+    
+    # AJUSTE 4: Criação segura da lista de meses
+    # Filtramos datas nulas antes de gerar a lista do menu
+    df_tipo_mun = df_tipo_mun.dropna(subset=['data'])
     df_tipo_mun['mes_ano'] = df_tipo_mun['data'].dt.strftime('%m/%Y')
     
-    # 2. Removemos valores nulos e garantimos que tudo seja string antes de ordenar
-    meses_unicos = df_tipo_mun['mes_ano'].dropna().unique()
+    meses_unicos = df_tipo_mun['mes_ano'].unique()
     meses_lista = sorted([str(m) for m in meses_unicos])
     
-    # 3. Criamos o multiselect
     filtro_data = st.sidebar.multiselect(
         "Período de Coleta", 
         options=meses_lista, 
-        default=meses_lista if meses_lista else []
+        default=meses_lista # Agora ele seleciona TUDO por padrão para não sumir dados
     )
     
-    df_filtered = df_tipo_mun[df_tipo_mun['mes_ano'].isin(filtro_data)] if filtro_data else df_tipo_mun
+    # Aplicação do filtro final
+    if filtro_data:
+        df_filtered = df_tipo_mun[df_tipo_mun['mes_ano'].isin(filtro_data)]
+    else:
+        df_filtered = df_tipo_mun
 
-    # 5. HEADER
-    st.markdown(f"<h1 style='text-align: center; color: #1E40AF;'>Laboratório de Identificação de Vetores</h1>", unsafe_allow_html=True)
-    st.markdown(f"<h2 style='text-align: center; color: #4B5563;'>Dados {filtro_tipo} - {user_municipio.upper()}</h2>", unsafe_allow_html=True)
+    # --- EXIBIÇÃO DO DASHBOARD ---
+    st.markdown(f"<h1 style='text-align: center;'>Laboratório de Vetores</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='text-align: center;'>{filtro_tipo} - {user_municipio.upper()}</h2>", unsafe_allow_html=True)
+
+    # Métricas para conferência
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Amostras no Município", len(df_mun_base))
+    c2.metric("Amostras do Tipo", len(df_tipo_mun))
+    c3.metric("Amostras Exibidas (Filtro)", len(df_filtered))
+
     st.markdown("---")
-    
-    # KPIs
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Total Acumulado", f"{int(df_filtered['contagem'].sum()):,}")
-    k2.metric("Média por Ponto", f"{df_filtered['contagem'].mean():.1f}")
-    k3.metric("Pontos Filtrados", len(df_filtered))
-    k4.metric("Máximo Registrado", f"{df_filtered['contagem'].max():.0f}")
 
-    st.markdown("---")
-
-    # 6. LAYOUT PRINCIPAL
+    # Gráficos e Mapa
     col_esq, col_meio, col_dir = st.columns([1.5, 2.4, 1.5])
 
+    # Agrupamento para o Mapa
     df_mapa = df_filtered.groupby(['lat', 'lon', 'endereco', 'regiao']).agg({'contagem': 'mean'}).reset_index()
 
     with col_esq:
         resumo_reg = df_filtered.groupby('regiao')['contagem'].mean().reset_index()
-        fig_bar = px.bar(resumo_reg, x='contagem', y='regiao', orientation='h', 
-                         title="MÉDIA POR REGIÃO", template="plotly_white",
-                         color_discrete_sequence=['#3B82F6'])
-        st.plotly_chart(fig_bar, use_container_width=True)
-
+        st.plotly_chart(px.bar(resumo_reg, x='contagem', y='regiao', orientation='h', title="MÉDIA/REGIÃO"), use_container_width=True)
+        
         resumo_time = df_filtered.groupby(df_filtered['data'].dt.date)['contagem'].sum().reset_index()
-        fig_line = px.line(resumo_time, x='data', y='contagem', title="TENDÊNCIA (SOMA)", template="plotly_white")
-        fig_line.update_traces(line_color='#EF4444')
-        st.plotly_chart(fig_line, use_container_width=True)
+        st.plotly_chart(px.line(resumo_time, x='data', y='contagem', title="SOMA TEMPORAL"), use_container_width=True)
 
     with col_meio:
-        st.markdown("<h4 style='text-align: center;'>MAPA DE INFESTAÇÃO</h4>", unsafe_allow_html=True)
         if not df_mapa.empty:
             m = folium.Map(location=[df_mapa['lat'].mean(), df_mapa['lon'].mean()], zoom_start=13, tiles="CartoDB positron")
             v_max = df_mapa['contagem'].max() if df_mapa['contagem'].max() > 0 else 1
             colormap = cm.LinearColormap(colors=['blue', 'lime', 'yellow', 'red'], vmin=0, vmax=v_max)
-            
             for _, row in df_mapa.iterrows():
                 folium.CircleMarker(
                     location=[row['lat'], row['lon']],
@@ -171,18 +130,14 @@ if user_password == senha_correta:
                     fill_color=colormap(row['contagem']), fill_opacity=0.6,
                     popup=f"{row['endereco']}: {row['contagem']:.1f}"
                 ).add_to(m)
-            m.add_child(colormap)
             st_folium(m, width="100%", height=600, returned_objects=[])
 
     with col_dir:
         resumo_pie = df_mapa.groupby('regiao')['contagem'].mean().reset_index()
-        fig_pie = px.pie(resumo_pie, values='contagem', names='regiao', hole=0.5, title="DISTRIBUIÇÃO %")
-        st.plotly_chart(fig_pie, use_container_width=True)
-
+        st.plotly_chart(px.pie(resumo_pie, values='contagem', names='regiao', hole=0.5, title="% DISTRIBUIÇÃO"), use_container_width=True)
         st.markdown("### 🚨 PONTOS CRÍTICOS")
-        st.dataframe(df_mapa.nlargest(5, 'contagem')[['endereco', 'contagem']], hide_index=True, use_container_width=True)
+        st.dataframe(df_mapa.nlargest(5, 'contagem')[['endereco', 'contagem']], hide_index=True)
 
 else:
-    if user_password:
-        st.sidebar.error("CHAVE DE ACESSO INVÁLIDA")
-    st.warning("⚠️ Aguardando autenticação.")
+    if user_password: st.sidebar.error("SENHA INCORRETA")
+    st.warning("Insira a chave de acesso.")
