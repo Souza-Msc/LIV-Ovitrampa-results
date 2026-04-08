@@ -6,6 +6,7 @@ from streamlit_folium import st_folium
 import branca.colormap as cm
 import numpy as np
 import time
+from datetime import datetime
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(layout="wide", page_title="Relatório de dados Ovitrampas", page_icon="🦟")
@@ -33,6 +34,13 @@ st.markdown("""
         border-radius: 4px;
         color: #1E40AF;
     }
+    .update-text {
+        font-size: 0.75rem;
+        color: #6B7280;
+        text-align: center;
+        margin-top: -10px;
+        margin-bottom: 20px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -56,10 +64,18 @@ def load_and_process_data(timestamp):
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         
         df['tipo'] = df['tipo'].fillna('Não Informado').astype(str)
+        
+        # Salva o horário da atualização no estado da sessão
+        st.session_state['last_update'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        
         return df.dropna(subset=['lat', 'lon', 'municipio'])
     except Exception as e:
         st.error(f"Erro ao carregar dados: {e}")
         return pd.DataFrame()
+
+# Inicializa a variável de atualização se não existir
+if 'last_update' not in st.session_state:
+    st.session_state['last_update'] = "Aguardando carregamento..."
 
 df_raw = load_and_process_data(int(time.time()))
 
@@ -74,6 +90,9 @@ st.sidebar.title("Acesso Restrito")
 if st.sidebar.button("🔄 Atualizar Dados"):
     st.cache_data.clear()
     st.rerun()
+
+# Texto da última atualização logo abaixo do botão
+st.sidebar.markdown(f'<p class="update-text">Última atualização: {st.session_state["last_update"]}</p>', unsafe_allow_html=True)
 
 lista_municipios = sorted(df_raw['municipio'].unique())
 user_municipio = st.sidebar.selectbox("Município", lista_municipios)
@@ -99,29 +118,27 @@ if user_password == senha_correta:
     
     df_filtered = df_tipo_mun[df_tipo_mun['mes_ano'].isin(filtro_data)] if filtro_data else df_tipo_mun
 
-    # 5. HEADER DASHBOARD (ESTILO ORIGINAL COM NOVAS MÉTRICAS)
+    # 5. HEADER DASHBOARD
     st.markdown(f"<h1 style='text-align: center; color: #1E40AF;'>Laboratório de Identificação de Vetores</h1>", unsafe_allow_html=True)
     st.markdown(f"<h2 style='text-align: center; color: #1E40AF;'>Dados {filtro_tipo} - {user_municipio.upper()}</h2>", unsafe_allow_html=True)
 
     st.markdown("---")
     
-    # KPIs Rápidos (Com as nomenclaturas que você solicitou)
+    # KPIs Rápidos
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric(f"Total {filtro_tipo}", f"{len(df_mun_base)}")
-    k2.metric("Amostras no período", len(df_filtered))
-    k3.metric("Média no período", f"{df_filtered['contagem'].mean():.1f}")
-    k4.metric("Soma no período", f"{int(df_filtered['contagem'].sum()):,}")
+    k1.metric(f"Total de amostras de {filtro_tipo}", f"{len(df_mun_base)}")
+    k2.metric("Total de amostras no período selecionado", len(df_filtered))
+    k3.metric("Média de registros no período selecionado", f"{df_filtered['contagem'].mean():.1f}")
+    k4.metric("Total de registros no período selecionado", f"{int(df_filtered['contagem'].sum()):,}")
 
     st.markdown("---")
 
     # 6. LAYOUT PRINCIPAL (1.5 | 2.4 | 1.5)
     col_esq, col_meio, col_dir = st.columns([1.5, 2.4, 1.5])
 
-    # Agrupamento para o Mapa
     df_mapa = df_filtered.groupby(['lat', 'lon', 'endereco', 'regiao']).agg({'contagem': 'mean'}).reset_index()
 
     with col_esq:
-        # Gráfico 1: Média por Região
         resumo_reg = df_filtered.groupby('regiao')['contagem'].mean().reset_index()
         fig_bar = px.bar(resumo_reg, x='contagem', y='regiao', orientation='h', 
                          title="MÉDIA POR REGIÃO", template="plotly_white",
@@ -129,7 +146,6 @@ if user_password == senha_correta:
         fig_bar.update_layout(height=350, margin=dict(l=10, r=30, t=40, b=40), paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_bar, use_container_width=True)
 
-        # Gráfico 2: Tendência Temporal
         resumo_time = df_filtered.groupby(df_filtered['data'].dt.date)['contagem'].sum().reset_index()
         fig_line = px.line(resumo_time, x='data', y='contagem', title="TENDÊNCIA (SOMA)", template="plotly_white")
         fig_line.update_traces(line_color='#EF4444', line_width=2)
@@ -166,14 +182,12 @@ if user_password == senha_correta:
             st.info("Sem dados geográficos para os filtros selecionados.")
         
     with col_dir:
-        # Gráfico 3: Distribuição %
         resumo_pie = df_mapa.groupby('regiao')['contagem'].mean().reset_index()
         fig_pie = px.pie(resumo_pie, values='contagem', names='regiao', hole=0.5, 
                          title="DISTRIBUIÇÃO %", template="plotly_white")
         fig_pie.update_layout(height=350, showlegend=False, margin=dict(l=10, r=10, t=30, b=20), paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_pie, use_container_width=True)
 
-        # Gráfico 4: Tabela de Alertas
         st.markdown("### 🚨 PONTOS CRÍTICOS")
         top_5 = df_mapa.nlargest(5, 'contagem')[['endereco', 'contagem', 'regiao']]
         top_5['contagem'] = top_5['contagem'].round(1)
@@ -188,9 +202,9 @@ if user_password == senha_correta:
                 "regiao": "Região"
             }
         )
-        st.markdown(f'<div class="small-info"><b>Info:</b> Exibindo dados de {filtro_tipo}.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="small-info"><b>Info:</b> Dados de {filtro_tipo}.</div>', unsafe_allow_html=True)
 
 else:
     if user_password:
         st.sidebar.error("CHAVE DE ACESSO INVÁLIDA")
-    st.warning("⚠️ Aguardando autenticação para carregar os dados governamentais.")
+    st.warning("⚠️ Aguardando autenticação.")
