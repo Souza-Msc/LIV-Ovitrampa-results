@@ -6,7 +6,7 @@ from streamlit_folium import st_folium
 import branca.colormap as cm
 import numpy as np
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(layout="wide", page_title="Relatório de dados Ovitrampas", page_icon="🦟")
@@ -66,7 +66,9 @@ def load_and_process_data(timestamp):
         df['tipo'] = df['tipo'].fillna('Não Informado').astype(str)
         
         # Salva o horário da atualização no estado da sessão
-        st.session_state['last_update'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        # Calcula o horário de Brasília (UTC-3)
+        horario_brasilia = datetime.now() - timedelta(hours=3)
+        st.session_state['last_update'] = horario_brasilia.strftime("%d/%m/%Y %H:%M:%S")
         
         return df.dropna(subset=['lat', 'lon', 'municipio'])
     except Exception as e:
