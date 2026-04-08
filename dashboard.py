@@ -109,13 +109,19 @@ if user_password == senha_correta:
     
     # Filtro de Data
     df_tipo_mun = df_mun_base[df_mun_base['tipo'] == filtro_tipo].copy()
+   
+    # 1. Criamos a coluna mes_ano
     df_tipo_mun['mes_ano'] = df_tipo_mun['data'].dt.strftime('%m/%Y')
     
-    meses_lista = sorted(df_tipo_mun['mes_ano'].unique())
+    # 2. Removemos valores nulos e garantimos que tudo seja string antes de ordenar
+    meses_unicos = df_tipo_mun['mes_ano'].dropna().unique()
+    meses_lista = sorted([str(m) for m in meses_unicos])
+    
+    # 3. Criamos o multiselect
     filtro_data = st.sidebar.multiselect(
         "Período de Coleta", 
         options=meses_lista, 
-        default=meses_lista if meses_lista else [] # Padrão: Selecionar tudo para não sumir dados
+        default=meses_lista if meses_lista else []
     )
     
     df_filtered = df_tipo_mun[df_tipo_mun['mes_ano'].isin(filtro_data)] if filtro_data else df_tipo_mun
