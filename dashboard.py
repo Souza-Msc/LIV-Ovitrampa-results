@@ -36,7 +36,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # 3. CARREGAMENTO E TRATAMENTO DE DADOS
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=10)
 def load_and_process_data():
     SHEET_ID = "1g8sAi6kUJnHHxCl97s6JwGDnRF8asTPmmCfWp2qFbEI"
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
